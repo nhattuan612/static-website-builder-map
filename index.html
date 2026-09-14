@@ -210,6 +210,7 @@
         <p class="memory-rule"><strong>Tài liệu độc lập:</strong> file này tự chứa phạm vi, dữ liệu cần điền, quy trình, prompt và tiêu chí nghiệm thu. Agent không được đọc kế thừa yêu cầu từ một HTML/MAP, chat hoặc dự án khác.</p>
         <p class="memory-rule"><strong>Input Folder trong project:</strong> Agent phải chủ động vào đúng repository/project hiện tại để nhận diện và đọc các asset/content Human đã đặt vào: logo, favicon, thumbnail/ảnh, mô tả bố cục/phong cách và content theo từng trang/section. Nếu ô Project Memory để trống, Agent phải tìm giá trị trong brief/layout/content/design Markdown hoặc file tương đương; nếu Memory mâu thuẫn tài liệu local thì dừng hỏi Human. Có thể dùng tên file/thư mục tương đương; phải lập inventory có đường dẫn, loại file, route/section và trạng thái đọc được trước khi build.</p>
         <p class="memory-rule"><strong>Email tách theo vai trò:</strong> điền đúng email đang dùng cho từng tài khoản: Cloudflare, Resend và email Gmail/inbox nhận + hiển thị Contact. Google Search Console/Analytics là tuỳ chọn; chỉ điền khi muốn triển khai Google. Agent phải kiểm tra từng dịch vụ theo đúng ô tương ứng; nếu sai email, thiếu email hoặc có nhiều profile thì dừng hỏi Human, không tự đổi tài khoản. Email nhận Contact không phải Resend sender.</p>
+        <p class="memory-rule"><strong>Cloudflare tự tìm ID:</strong> Human chỉ nhập email tài khoản Cloudflare. Agent phải dùng Cloudflare plugin/API ở chế độ read-only để tự khám phá Account ID; nếu có domain riêng thì tự tìm Zone ID và kiểm tra Zone thuộc đúng Account. Không thêm hoặc yêu cầu Human nhập hai ID này. Nếu plugin/account trả về nhiều kết quả, sai email hoặc không đủ quyền thì dừng trước mọi thay đổi.</p>
         <p class="memory-rule"><strong>Agent tự quyết định:</strong> thư mục client là <code>clients/&lt;client-id&gt;/</code>, ảnh là <code>clients/&lt;client-id&gt;/images/</code>, Pages project là <code>site-&lt;client-id&gt;</code>, endpoint Contact là <code>/api/contact</code>, biến secret là <code>RESEND_API_KEY</code>. Không cần điền URL registrar, URL Pages, Resend dashboard, endpoint, thư mục assets hoặc Factory repo URL. Design skill không lưu trong MAP; Human sẽ chỉ định skill trực tiếp trong lệnh chạy. Agent không tự suy đoán, cài đặt hoặc đổi design skill.</p>
         <p class="memory-rule"><strong>Human Execution Override:</strong> dùng ô này để skip/đổi phạm vi cho riêng lần chạy hiện tại. Hãy ghi rõ slice/tính năng cần bỏ qua và cách các bước QA/handoff phải thích nghi. Override không thể vô hiệu hoá quy tắc an toàn, không thanh toán, không secret hoặc Human-only gate.</p>
         <p class="memory-rule"><strong>Route mặc định:</strong> nếu ô route/page để trống, Agent chỉ tạo 3 trang nội dung chính: <code>/</code> Home, <code>/about</code> About và <code>/contact</code> Contact. <code>404</code> là trang kỹ thuật; Privacy/Terms chỉ thêm khi analytics, tracking hoặc yêu cầu pháp lý cần. Blog không nằm trong mặc định; chỉ tạo Blog khi Human ghi rõ route <code>/blog</code>.</p>
@@ -336,6 +337,22 @@ J. GATE: preserve the last PASS version, backup before risky changes, and return
     const memoryInputs = [...document.querySelectorAll("[data-memory]")];
     let versionState = { date: "", number: 1, scope: "", signature: "" };
     const checkState = Object.create(null);
+    const CLOUDFLARE_TOOL_ROUTING = `CLOUDFLARE TOOL ROUTING — REQUIRED
+Use the Cloudflare plugin now. Use the available \`cloudflare-api\` MCP server and relevant \`cloudflare:\` skills.
+- Use \`cloudflare-api docs\` for current Cloudflare documentation.
+- Use \`cloudflare-api search\` to discover the correct API endpoint.
+- Use \`cloudflare-api execute\` for Cloudflare API operations.
+- Use \`cloudflare:wrangler\` for local development and deployment when available.
+- Use BROWSER only for Cloudflare login, 2FA/passkey, CAPTCHA, billing, Human approval and visual inspection.
+- If the Cloudflare plugin or a required tool is unavailable, return BLOCKED-TOOL-UNAVAILABLE; do not pretend it ran or silently substitute an unverified account.
+
+CLOUDFLARE ACCOUNT DISCOVERY — REQUIRED BEFORE ANY MUTATION
+- cloudflareEmail is the only Cloudflare identity value provided by Human. Account ID and Zone ID are runtime-discovered values, not Project Memory inputs.
+- In DEMO or factory-maintenance, mark this check NOT-APPLICABLE and do not access Cloudflare.
+- In production, first verify the visible browser email equals cloudflareEmail. Then use the Cloudflare plugin/API in read-only mode to discover and verify the authenticated Account ID.
+- If a custom domain exists, discover Zone ID from the domain and verify that the Zone belongs to the verified Account. If the domain is blank, use the Pages hostname and do not require a Zone ID.
+- Never infer an account from email or domain alone. If the connector is bound to another account, multiple accounts match, the result is missing, or permissions are insufficient, STOP before creating, updating, deleting, deploying or changing DNS and ask the Human to re-authenticate/select the correct account.
+- Do not put API tokens, passwords, cookies or other credentials in Project Memory, the prompt, source, logs or Git.`;
     const $ = (selector) => document.querySelector(selector);
 
     const steps = [
@@ -816,7 +833,7 @@ J. GATE: preserve the last PASS version, backup before risky changes, and return
     function refreshPrompt() {
       const promptBox = $("#promptBox");
       const index = currentIndex();
-      if (promptBox && steps[index]) promptBox.value = DOCUMENT_SCOPE + OFFICIAL_LINKS + DOMAIN_FALLBACK_RULE + INPUT_SOURCE_RULE + steps[index].prompt + projectContext() + scopeContext() + executionScopeContext(steps[index].n) + releaseContext() + humanOverrideContext() + modeContext();
+      if (promptBox && steps[index]) promptBox.value = DOCUMENT_SCOPE + CLOUDFLARE_TOOL_ROUTING + OFFICIAL_LINKS + DOMAIN_FALLBACK_RULE + INPUT_SOURCE_RULE + steps[index].prompt + projectContext() + scopeContext() + executionScopeContext(steps[index].n) + releaseContext() + humanOverrideContext() + modeContext();
     }
 
     function renderToc(current) {
@@ -842,7 +859,7 @@ J. GATE: preserve the last PASS version, backup before risky changes, and return
         <section class="prompt"><div class="prompt-head"><h3>English prompt + Project Memory</h3><button class="copy" id="copyButton" type="button">Copy prompt</button></div><textarea id="promptBox" readonly aria-label="Prompt cho Agent">${step.prompt}</textarea></section>
         <div class="nav"><button class="button" id="prevButton" type="button">← Lùi</button><span class="small">Slice ${current + 1}/${steps.length} · checklist chỉ tồn tại trong phiên hiện tại · F5 sẽ reset</span><button class="button button--primary" id="nextButton" type="button">${current === steps.length - 1 ? "Về đầu MAP" : "Tiếp →"}</button></div>
       </div>`;
-      $("#promptBox").value = DOCUMENT_SCOPE + OFFICIAL_LINKS + DOMAIN_FALLBACK_RULE + INPUT_SOURCE_RULE + step.prompt + projectContext() + scopeContext() + executionScopeContext(step.n) + releaseContext() + humanOverrideContext() + modeContext();
+      $("#promptBox").value = DOCUMENT_SCOPE + CLOUDFLARE_TOOL_ROUTING + OFFICIAL_LINKS + DOMAIN_FALLBACK_RULE + INPUT_SOURCE_RULE + step.prompt + projectContext() + scopeContext() + executionScopeContext(step.n) + releaseContext() + humanOverrideContext() + modeContext();
       $("#progressText").textContent = `${step.n} / ${steps.length}`;
       $("#progressBar").style.width = `${((current + 1) / steps.length) * 100}%`;
       renderToc(current);
@@ -976,6 +993,8 @@ J. GATE: preserve the last PASS version, backup before risky changes, and return
         "- Prompts are English; Agent reports to Human in the selected response language.",
         "- Responsive contract: test 320/375/768/1024/1440px; no overflow, dead controls, hidden focus or layout shift. Motion respects prefers-reduced-motion.",
         "",
+        ...CLOUDFLARE_TOOL_ROUTING.split("\n"),
+        "",
         "## 3. Mandatory execution guardrails",
         "",
         ...EXECUTION_GUARDRAILS.split("\n"),
@@ -1011,7 +1030,7 @@ J. GATE: preserve the last PASS version, backup before risky changes, and return
         ""
       ];
       steps.forEach((step) => {
-        lines.push(`### Slice ${step.n} · ${step.title}`, "", `**Where:** ${step.where}`, "", `**Objective:**`, ...step.objective.map((item) => `- ${item}`), "", `**Checklist:**`, ...step.work.map((item) => `- [ ] ${item}`), "", `**PASS:** ${step.success}`, "", `**FAIL / recovery:** ${step.failure}`, "", "**Prompt for Agent:**", "```text", DOCUMENT_SCOPE + OFFICIAL_LINKS + DOMAIN_FALLBACK_RULE + INPUT_SOURCE_RULE + step.prompt + projectContext() + scopeContext() + executionScopeContext(step.n) + releaseContext() + humanOverrideContext() + modeContext(), "```", "");
+        lines.push(`### Slice ${step.n} · ${step.title}`, "", `**Where:** ${step.where}`, "", `**Objective:**`, ...step.objective.map((item) => `- ${item}`), "", `**Checklist:**`, ...step.work.map((item) => `- [ ] ${item}`), "", `**PASS:** ${step.success}`, "", `**FAIL / recovery:** ${step.failure}`, "", "**Prompt for Agent:**", "```text", DOCUMENT_SCOPE + CLOUDFLARE_TOOL_ROUTING + OFFICIAL_LINKS + DOMAIN_FALLBACK_RULE + INPUT_SOURCE_RULE + step.prompt + projectContext() + scopeContext() + executionScopeContext(step.n) + releaseContext() + humanOverrideContext() + modeContext(), "```", "");
       });
       lines.push("## 6. Final handoff rule", "", "Do not mark DONE until the mode-aware Preflight and Quality Gate pass, the final brief comparison passes, production smoke tests pass when applicable, the Human has signed off, and the Release Ledger/rollback evidence is recorded. DEMO and factory-maintenance must remain explicitly non-production; factory-maintenance is LOCAL factory-only.");
       const slug = (m.projectName || "static-website").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "static-website";
